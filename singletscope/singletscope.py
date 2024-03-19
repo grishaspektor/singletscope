@@ -135,6 +135,24 @@ class SiglentScope:
         # Save the plot
         plot_filename = f"{base_filename}.png"
         self.fig.savefig(plot_filename)
+        
+    @staticmethod
+    def list_visa_addresses():
+        rm = visa.ResourceManager()
+        addresses = rm.list_resources()
+        instruments = {}
+
+        for address in addresses:
+            try:
+                instrument = rm.open_resource(address)
+                idn = instrument.query('*IDN?')
+                instruments[address] = idn.strip()
+            except Exception as e:
+                print(f"Error querying device at {address}: {e}")
+                instruments[address] = "Could not query IDN"
+
+        return instruments
+
 
     def plot_channels(self, channel_vec=[1, 2, 3, 4], labels=None, title=""):
         self.fig, self.ax = plt.subplots(figsize=(10, 6))
@@ -160,4 +178,8 @@ if __name__ == '__main__':
     scope = SiglentScope("USB0::0xF4EC::0x1011::SDS2PEED6R3524::INSTR")
     scope.plot_channels([1,2],labels=['signal','output'],title = "Modulator 1")  # Example usage
     scope.save_data('channel_data.csv')
+    
+    visa_addresses = SiglentScope.list_visa_addresses()
+    for address, idn in visa_addresses.items():
+        print(f"{address}: {idn}")
 
