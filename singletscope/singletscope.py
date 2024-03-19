@@ -161,10 +161,7 @@ class SiglentScope:
             labels = [f'Channel {ch}' for ch in channel_vec]
 
         for i, channel in enumerate(channel_vec):
-            if channel in self.channel_data:
-                time_value, volt_value = self.channel_data[channel]
-            else:
-                time_value, volt_value = self._read_waveform_data(channel)
+            time_value, volt_value = self._read_waveform_data(channel)
             self.ax.plot(time_value, volt_value, label=labels[i])
 
         self.ax.set_title(title)
