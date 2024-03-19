@@ -2,7 +2,7 @@
 """
 Created on Tue Mar 19 10:40:05 2024
 
-@author: lab
+@author: Grisha Spektor
 """
 
 import pyvisa as visa
