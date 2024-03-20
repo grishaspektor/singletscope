@@ -13,9 +13,18 @@ import gc
 import os
 
 class SiglentScope:
+    """
+    A class to interface with a Siglent oscilloscope and perform data acquisition and analysis.
+
+    Attributes:
+        HORI_NUM (int): Represents the horizontal number used in time base calculations.
+        tdiv_enum (list): Time division settings for the oscilloscope.
+        resource_string (str): VISA resource string to connect to the oscilloscope.
+        channel_data (dict): Stores the waveform data for each channel.
+    """
     HORI_NUM = 10 #page 696 in the table corresponds to the grid variable (https://www.siglenteu.com/wp-content/uploads/dlm_uploads/2024/03/ProgrammingGuide_EN11F.pdf)
-    # This is the time base table in page 691 of (https://www.siglenteu.com/wp-content/uploads/dlm_uploads/2024/03/ProgrammingGuide_EN11F.pdf)
     
+    # This is the time base table in page 691 of (https://www.siglenteu.com/wp-content/uploads/dlm_uploads/2024/03/ProgrammingGuide_EN11F.pdf)
     tdiv_enum = [200e-12, 500e-12, 1e-9,
                  2e-9, 5e-9, 10e-9, 20e-9, 50e-9, 100e-9, 200e-9, 500e-9,
                  1e-6, 2e-6, 5e-6, 10e-6, 20e-6, 50e-6, 100e-6, 200e-6, 500e-6,
@@ -23,6 +32,13 @@ class SiglentScope:
                  1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]
 
     def __init__(self, resource_string):
+        """
+        Initializes the SiglentScope with the given VISA resource string.
+
+        Args:
+            resource_string (str): The VISA resource string for the oscilloscope.
+            Can be obtained by running SiglentScope.list_visa_addresses()
+        """
         self.resource_string = resource_string
         self._rm = visa.ResourceManager()
         self.scope = self._rm.open_resource(self.resource_string)
@@ -31,14 +47,36 @@ class SiglentScope:
         self.channel_data = {}  # Dictionary to store data for each channel
     
     def get_channel_data(self, channel):
-            # Check if the channel data exists and return it
-            if channel in self.channel_data:
-                return self.channel_data[channel]
-            else:
-                raise ValueError(f"No data available for channel {channel}. Please ensure the channel number is correct and the data has been acquired.")
+        """
+        Retrieves the waveform data for a specified channel.
+
+        Args:
+            channel (int): The channel number to retrieve data for.
+
+        Returns:
+            tuple: A tuple containing time values and voltage values for the channel.
+
+        Raises:
+            ValueError: If data for the specified channel is not available.
+        """
+        # Check if the channel data exists and return it
+        if channel in self.channel_data:
+            return self.channel_data[channel]
+        else:
+            raise ValueError(f"No data available for channel {channel}. Please ensure the channel number is correct and the data has been acquired.")
 
     def _parse_preamble(self, recv):
-        # Parsing waveform preamble data according to: https://www.siglenteu.com/wp-content/uploads/dlm_uploads/2024/03/ProgrammingGuide_EN11F.pdf
+        """
+        Parses the waveform preamble data to extract essential parameters.
+        Parsing waveform preamble data according to: https://www.siglenteu.com/wp-content/uploads/dlm_uploads/2024/03/ProgrammingGuide_EN11F.pdf
+
+        Args:
+            recv (bytes): The raw preamble data received from the oscilloscope.
+
+        Returns:
+            tuple: A tuple containing various oscilloscope parameters like vertical division, offset, etc.
+        """
+        
         WAVE_ARRAY_1 = recv[0x3c:0x3f + 1]
         wave_array_count = recv[0x74:0x77 + 1]
         first_point = recv[0x84:0x87 + 1]
@@ -68,8 +106,17 @@ class SiglentScope:
         
         return vdiv, offset, interval, delay, tdiv, code, adc_bit
 
-    def _read_waveform_data(self, channel):
-        # Logic to read the waveform data
+    def read_waveform_data(self, channel):
+        """
+        Reads waveform data from the oscilloscope for the specified channel and stores it.
+
+        Args:
+            channel (int): The channel number to read data from.
+
+        Returns:
+            tuple: A tuple containing time values and voltage values for the waveform.
+        """
+        
         # Return the waveform data and time axis
         self.scope.write(f":WAV:SOUR C{channel}")
         self.scope.write(":WAV:PREamble?")
@@ -88,7 +135,7 @@ class SiglentScope:
             self.scope.write(":WAVeform:POINt {}".format(one_piece_num))
 
         self.scope.write(":WAVeform:WIDTh BYTE")
-        
+        # if there is a 10 bit option set in the Acquisition setting
         if adc_bit > 8:
             self.scope.write(":WAVeform:WIDTh WORD")
 
@@ -121,7 +168,12 @@ class SiglentScope:
         return time_value, volt_value
     
     def save_data(self, filename):
-        # Save the waveform data
+        """
+        Saves the collected waveform data and plots to a file.
+
+        Args:
+            filename (str): Base filename to save the data and plot images. The extension is added automatically.
+        """
         base_filename, _ = os.path.splitext(filename)
         data_filename = f"{base_filename}.csv"
         with open(data_filename, 'w') as f:
@@ -138,6 +190,12 @@ class SiglentScope:
         
     @staticmethod
     def list_visa_addresses():
+        """
+        Lists all VISA addresses and their corresponding device IDNs.
+
+        Returns:
+            dict: A dictionary with VISA addresses as keys and device IDNs as values.
+        """
         rm = visa.ResourceManager()
         addresses = rm.list_resources()
         instruments = {}
@@ -154,14 +212,27 @@ class SiglentScope:
         return instruments
 
 
-    def plot_channels(self, channel_vec=[1, 2, 3, 4], labels=None, title=""):
+    def plot_channels(self, channel_vec=[1, 2, 3, 4], labels=None, title="", read_data = True):
+        """
+        Plots the waveform data for the specified channels.
+
+        Args:
+            channel_vec (list of int): A list of channels to plot.
+            labels (list of str, optional): A list of labels for the channels. Defaults to None.
+            title (str, optional): The title of the plot. Defaults to an empty string.
+            read_data (bool, optional): If True, read data from the scope before plotting. Defaults to True.
+        """
         self.fig, self.ax = plt.subplots(figsize=(10, 6))
 
         if labels is None:
             labels = [f'Channel {ch}' for ch in channel_vec]
 
         for i, channel in enumerate(channel_vec):
-            time_value, volt_value = self._read_waveform_data(channel)
+            if not read_data:
+                time_value, volt_value = self.channel_data[channel]
+            else:
+                time_value, volt_value = self.read_waveform_data(channel)
+            
             self.ax.plot(time_value, volt_value, label=labels[i])
 
         self.ax.set_title(title)
@@ -172,11 +243,21 @@ class SiglentScope:
         plt.show()
 
 if __name__ == '__main__':
+    # # Example plot and save the data
     scope = SiglentScope("USB0::0xF4EC::0x1011::SDS2PEED6R3524::INSTR")
     scope.plot_channels([1,2],labels=['signal','output'],title = "Modulator 1")  # Example usage
     scope.save_data('channel_data.csv')
     
-    visa_addresses = SiglentScope.list_visa_addresses()
-    for address, idn in visa_addresses.items():
-        print(f"{address}: {idn}")
+    # # Example read the data and then plot it
+    # scope = SiglentScope("USB0::0xF4EC::0x1011::SDS2PEED6R3524::INSTR")
+    # scope.read_waveform_data(channel=1)
+    # scope.read_waveform_data(channel=2)
+    # scope.plot_channels([1,2],labels=['signal','output'],title = "Modulator 1", read_data=False)  # Example usage of plot without reading the data again.
+    # scope.save_data('channel_data.csv')
+    
+    
+    # # Example plot all the visa-readable devices
+    # visa_addresses = SiglentScope.list_visa_addresses()
+    # for address, idn in visa_addresses.items():
+    #     print(f"{address}: {idn}")
 
