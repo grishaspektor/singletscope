@@ -1,6 +1,8 @@
 # SiglentScope
 
-A Python library to interface with Siglent oscilloscopes, enabling data acquisition and analysis.
+A Python library to interface with Siglent oscilloscopes, enabling data acquisition.
+Nothing fancy but will get you started.
+Tested on SDS2204X Plus.
 
 ## Installation
 
