@@ -42,6 +42,7 @@ class SiglentScope:
         self.resource_string = resource_string
         self._rm = visa.ResourceManager()
         self.scope = self._rm.open_resource(self.resource_string)
+        print("connected to scope.")
         self.scope.timeout = 2000
         self.scope.chunk_size = 10000000
         self.channel_data = {}  # Dictionary to store data for each channel
@@ -118,9 +119,11 @@ class SiglentScope:
         """
         
         # Return the waveform data and time axis
+        print('Reading Data..')
         self.scope.write(f":WAV:SOUR C{channel}")
         self.scope.write(":WAV:PREamble?")
         recv_all = self.scope.read_raw()
+        print(f'Read channel {channel} data.')
         recv = recv_all[recv_all.find(b'#') + 11:]
 
         # Parse the waveform parameters
@@ -169,25 +172,32 @@ class SiglentScope:
     
     def save_data(self, filename):
         """
-        Saves the collected waveform data and plots to a file.
-
+        Saves the collected waveform data in a new format where channel data is side by side.
+    
         Args:
-            filename (str): Base filename to save the data and plot images. The extension is added automatically.
+            filename (str): Base filename to save the data. The extension is added automatically.
         """
         base_filename, _ = os.path.splitext(filename)
         data_filename = f"{base_filename}.csv"
+    
+        # Assuming there are exactly two channels and they have the same length of data
+        channel_1_data = self.channel_data[1]  # (time_values, volt_values) for channel 1
+        channel_2_data = self.channel_data[2]  # (time_values, volt_values) for channel 2
+    
         with open(data_filename, 'w') as f:
-            for channel, (time_values, volt_values) in self.channel_data.items():
-                f.write(f'Channel {channel}\n')
-                f.write('Time(s),Voltage(V)\n')
-                for t, v in zip(time_values, volt_values):
-                    f.write(f'{t},{v}\n')
-                f.write('\n')
-
+            # Write headers
+            f.write('Channel 1,,Channel 2, \n')
+            f.write('Time(s),Voltage(V),Time(s),Voltage(V)\n')
+            
+            # Write data for both channels side by side
+            for (t1, v1), (t2, v2) in zip(zip(*channel_1_data), zip(*channel_2_data)):
+                f.write(f'{t1},{v1},{t2},{v2}\n')
+    
         # Save the plot
         plot_filename = f"{base_filename}.png"
         self.fig.savefig(plot_filename)
         
+           
     @staticmethod
     def list_visa_addresses():
         """
