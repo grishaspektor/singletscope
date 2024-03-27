@@ -1,6 +1,8 @@
 # SiglentScope
 
-A Python library to interface with Siglent oscilloscopes, enabling data acquisition and analysis.
+A Python library to interface with Siglent oscilloscopes, enabling data acquisition.
+Nothing fancy but will get you started.
+Tested on SDS2204X Plus.
 
 ## Installation
 
@@ -34,8 +36,11 @@ To plot the waveform data from specified channels:
 
 ```python
 
-# Plot data for channels 1 and 2
+# Plot data for channels 1 and 2. The function first reads the data from the scope and then plots it.
 scope.plot_channels([1, 2], labels=['Channel 1', 'Channel 2'], title="Waveform Data")
+
+# Plot data for channels 1 and 2 without reading it (use already read data stored in the instance):
+scope.plot_channels([1, 2], labels=['Channel 1', 'Channel 2'], title="Waveform Data", read_data=False)
 ```
 ### Saving Data and Plots
 To save the waveform data and plots:
