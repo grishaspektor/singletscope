@@ -170,7 +170,7 @@ class SiglentScope:
 
         return time_value, volt_value
     
-    def save_data(self, filename):
+    def save_data_1(self, filename):
         """
         Saves the collected waveform data in a new format where channel data is side by side.
     
@@ -196,6 +196,51 @@ class SiglentScope:
         # Save the plot
         plot_filename = f"{base_filename}.png"
         self.fig.savefig(plot_filename)
+        
+    def save_data(self, filename):
+        """
+        Saves the collected waveform data for all available channels into a CSV file,
+        formatting the headers and data according to the specified layout.
+    
+        Args:
+            filename (str): Base filename to save the data. The extension is added automatically.
+        """
+        base_filename, _ = os.path.splitext(filename)
+        data_filename = f"{base_filename}.csv"
+    
+        # Ensure the directory exists
+        os.makedirs(os.path.dirname(data_filename), exist_ok=True)
+    
+        with open(data_filename, 'w') as f:
+            # Write channel headers
+            for ch in self.channel_data.keys():
+                f.write(f'Channel {ch},,')
+            f.write('\n')
+    
+            # Write sub-headers for Time and Voltage
+            for _ in self.channel_data.keys():
+                f.write('Time (s),Voltage (V),')
+            f.write('\n')
+    
+            # Find the longest set of data points among all channels
+            max_length = max(len(data[1]) for data in self.channel_data.values())
+    
+            # Write data
+            for i in range(max_length):
+                for ch, (time_values, volt_values) in self.channel_data.items():
+                    if i < len(time_values):
+                        f.write(f"{time_values[i]},{volt_values[i]},")
+                    else:
+                        # Fill in empty data if this channel has fewer points
+                        f.write(' , ,')
+                f.write('\n')
+    
+        # Save the plot if it exists
+        if hasattr(self, 'fig'):
+            plot_filename = f"{base_filename}.png"
+            self.fig.savefig(plot_filename)
+
+
         
            
     @staticmethod
@@ -253,7 +298,7 @@ class SiglentScope:
         plt.show()
 
 if __name__ == '__main__':
-    # # Example plot and save the data
+    # Example plot and save the data
     scope = SiglentScope("USB0::0xF4EC::0x1011::SDS2PEED6R3524::INSTR")
     scope.plot_channels([1,2],labels=['signal','output'],title = "Modulator 1")  # Example usage
     scope.save_data('channel_data.csv')
