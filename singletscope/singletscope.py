@@ -240,6 +240,39 @@ class SiglentScope:
         return instruments
 
 
+    @staticmethod
+    def plot_external_channel_data(channel_data, channels_to_plot=None, channel_titles=None):
+        """
+        Plots the waveform data for specified channels with custom titles, using externally provided data.
+
+        Args:
+            channel_data (dict): A dictionary containing the waveform data for each channel,
+                                 where each key is a channel number, and the value is a tuple of (time_values, volt_values).
+            channels_to_plot (list, optional): A list of channels to plot. If None, plots all channels in the provided data.
+            channel_titles (dict, optional): A dictionary mapping channels to custom titles.
+        """
+        if channels_to_plot is None:
+            channels_to_plot = channel_data.keys()
+        
+        plt.figure(figsize=(10, 6))
+        
+        for channel in channels_to_plot:
+            if channel in channel_data:
+                time_values, volt_values = channel_data[channel]
+                title = channel_titles.get(channel, f"Channel {channel}") if channel_titles else f"Channel {channel}"
+                plt.plot(time_values, volt_values, label=title)
+            else:
+                print(f"Data for Channel {channel} is not available.")
+        
+        plt.title("External Scope Data")
+        plt.xlabel("Time (s)")
+        plt.ylabel("Voltage (V)")
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+
+    
+
     def plot_channels(self, channel_vec=[1, 2, 3, 4], labels=None, title="", read_data = True):
         """
         Plots the waveform data for the specified channels.
@@ -272,15 +305,15 @@ class SiglentScope:
 
 if __name__ == '__main__':
     # Example plot and save the data
-    # scope = SiglentScope("USB0::0xF4EC::0x1011::SDS2PEED6R3524::INSTR")
-    # scope.plot_channels([1,2],labels=['signal','output'],title = "Modulator 1")  # Example usage
+    scope = SiglentScope("USB0::0xF4EC::0x1011::SDS2PEED6R3524::INSTR")
+    scope.plot_channels([1,2,4],labels=['signal','output','trigger'],title = "Modulator 1")  # Example usage
     # scope.save_data('channel_data.csv')
     
     # # Example read the data and then plot it
-    scope = SiglentScope("USB0::0xF4EC::0x1011::SDS2PEED6R3524::INSTR")
-    scope.read_waveform_data(channel=1)
-    scope.read_waveform_data(channel=2)
-    scope.read_waveform_data(channel=4)
+    # scope = SiglentScope("USB0::0xF4EC::0x1011::SDS2PEED6R3524::INSTR")
+    # scope.read_waveform_data(channel=1)
+    # scope.read_waveform_data(channel=2)
+    # scope.read_waveform_data(channel=4)
     # scope.plot_channels([1,2],labels=['signal','output'],title = "Modulator 1", read_data=False)  # Example usage of plot without reading the data again.
     # scope.save_data('channel_data.csv')
     
