@@ -170,33 +170,6 @@ class SiglentScope:
 
         return time_value, volt_value
     
-    def save_data_1(self, filename):
-        """
-        Saves the collected waveform data in a new format where channel data is side by side.
-    
-        Args:
-            filename (str): Base filename to save the data. The extension is added automatically.
-        """
-        base_filename, _ = os.path.splitext(filename)
-        data_filename = f"{base_filename}.csv"
-    
-        # Assuming there are exactly two channels and they have the same length of data
-        channel_1_data = self.channel_data[1]  # (time_values, volt_values) for channel 1
-        channel_2_data = self.channel_data[2]  # (time_values, volt_values) for channel 2
-    
-        with open(data_filename, 'w') as f:
-            # Write headers
-            f.write('Channel 1,,Channel 2, \n')
-            f.write('Time(s),Voltage(V),Time(s),Voltage(V)\n')
-            
-            # Write data for both channels side by side
-            for (t1, v1), (t2, v2) in zip(zip(*channel_1_data), zip(*channel_2_data)):
-                f.write(f'{t1},{v1},{t2},{v2}\n')
-    
-        # Save the plot
-        plot_filename = f"{base_filename}.png"
-        self.fig.savefig(plot_filename)
-        
     def save_data(self, filename):
         """
         Saves the collected waveform data for all available channels into a CSV file,
@@ -299,14 +272,15 @@ class SiglentScope:
 
 if __name__ == '__main__':
     # Example plot and save the data
-    scope = SiglentScope("USB0::0xF4EC::0x1011::SDS2PEED6R3524::INSTR")
-    scope.plot_channels([1,2],labels=['signal','output'],title = "Modulator 1")  # Example usage
-    scope.save_data('channel_data.csv')
+    # scope = SiglentScope("USB0::0xF4EC::0x1011::SDS2PEED6R3524::INSTR")
+    # scope.plot_channels([1,2],labels=['signal','output'],title = "Modulator 1")  # Example usage
+    # scope.save_data('channel_data.csv')
     
     # # Example read the data and then plot it
-    # scope = SiglentScope("USB0::0xF4EC::0x1011::SDS2PEED6R3524::INSTR")
-    # scope.read_waveform_data(channel=1)
-    # scope.read_waveform_data(channel=2)
+    scope = SiglentScope("USB0::0xF4EC::0x1011::SDS2PEED6R3524::INSTR")
+    scope.read_waveform_data(channel=1)
+    scope.read_waveform_data(channel=2)
+    scope.read_waveform_data(channel=4)
     # scope.plot_channels([1,2],labels=['signal','output'],title = "Modulator 1", read_data=False)  # Example usage of plot without reading the data again.
     # scope.save_data('channel_data.csv')
     
