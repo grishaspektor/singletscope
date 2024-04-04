@@ -14,7 +14,8 @@ import os
 
 #<todo>
 # make sequence reading capability with selected frames.
-# can we get the state of the scope measurement?
+# can we get the state of the scope measurement? - seems that I can get it through manually saving a csv file with the options and then manually setting them.
+# But I don't think I wanna do it...
 # can we then set the state of the scope measurement?
 class SiglentScope:
     """
@@ -70,13 +71,49 @@ class SiglentScope:
         else:
             raise ValueError(f"No data available for channel {channel}. Please ensure the channel number is correct and the data has been acquired.")
 
-    def _parse_preamble(self, recv):
+    def _main_time_stamp_deal(self, time):
+        """
+        main_time_stamp_deal:Parsing timestamps from binary blocks
+        https://www.siglenteu.com/wp-content/uploads/dlm_uploads/2024/03/ProgrammingGuide_EN11F.pdf page 784
+
+
+        Parameters
+        ----------
+        time : a binary block
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
+        seconds = time[0x00:0x08] # long double
+        minutes = time[0x08:0x09] # char
+        hours = time[0x09:0x0a] # char
+        days = time[0x0a:0x0b] # char
+        months = time[0x0b:0x0c] # char
+        year = time[0x0c:0x0e] # short
+        seconds = struct.unpack('d',seconds)[0]
+        minutes = struct.unpack('c', minutes)[0]
+        hours = struct.unpack('c', hours)[0]
+        days = struct.unpack('c', days)[0]
+        months = struct.unpack('c', months)[0]
+        year = struct.unpack('h', year)[0]
+        months = int.from_bytes(months, byteorder='big', signed=False)
+        days = int.from_bytes(days, byteorder='big', signed=False)
+        hours = int.from_bytes(hours, byteorder='big', signed=False)
+        minutes = int.from_bytes(minutes, byteorder='big', signed=False)
+        
+        return "{}/{}/{},{}:{}:{}".format(year,months,days,hours,minutes,seconds)
+
+    def _parse_preamble(self, recv, reading_frames=False):
         """
         Parses the waveform preamble data to extract essential parameters.
         Parsing waveform preamble data according to: https://www.siglenteu.com/wp-content/uploads/dlm_uploads/2024/03/ProgrammingGuide_EN11F.pdf
 
         Args:
             recv (bytes): The raw preamble data received from the oscilloscope.
+            reading_frames: a backward-compatability flag to not disturb the reading procedure of the regular channel
 
         Returns:
             tuple: A tuple containing various oscilloscope parameters like vertical division, offset, etc.
@@ -95,6 +132,24 @@ class SiglentScope:
         tdiv = recv[0x144:0x145 + 1]
         probe = recv[0x148:0x14b + 1]
         
+        # additional paramteres for the Sequence frame reading:
+        if reading_frames:
+            data_width = recv[0x20:0x21+1]#01-16bit,00-8bit
+            data_order = recv[0x22:0x23+1]#01-MSB,00-LSB
+            one_fram_pts = recv[0x74:0x77+1]#pts of single frame,maybe bigger than 12.5M
+            read_frame = recv[0x90:0x93+1]#all sequence frames number return by this command
+            sum_frame = recv[0x94:0x97+1]#all sequence frames number acquired
+            sn = recv[0xae:0xaf+1]
+            interval = recv[0xb0:0xb3+1]
+            
+            width = struct.unpack('h',data_width)[0]
+            order = struct.unpack('h',data_order)[0]
+            sn = struct.unpack('h',sn)[0]
+            one_fram_pts = struct.unpack('i',one_fram_pts)[0]
+            read_frame = struct.unpack('i',read_frame)[0]
+            sum_frame = struct.unpack('i',sum_frame)[0]
+
+        
         data_bytes = struct.unpack('i', WAVE_ARRAY_1)[0]
         point_num = struct.unpack('i', wave_array_count)[0]
         fp = struct.unpack('i', first_point)[0]
@@ -109,7 +164,94 @@ class SiglentScope:
         adc_bit = struct.unpack('h', adc_bit)[0]
         tdiv = SiglentScope.tdiv_enum[tdiv_index]
         
-        return vdiv, offset, interval, delay, tdiv, code, adc_bit
+        if reading_frames: # returns more arguments.
+            return vdiv,offset,interval,delay,tdiv,code,adc_bit,one_fram_pts,read_frame,sum_frame
+        else:
+            return vdiv, offset, interval, delay, tdiv, code, adc_bit
+
+    def read_sequence_frame(self, channel, frame_num=1):
+        """
+        Read data of single frame of a sequence.
+        Assumes there is a sequence! no error checking.
+        A bit duplicated with read_waveform_data
+
+        Parameters
+        ----------
+        channel : int
+            number of channel to read from.
+        frame_num : int
+            number of frame to load - no error checking!.
+
+        Returns
+        -------
+        time and voltage traces .
+
+        """
+        print(f"Reading channel {channel}, frame {frame_num}..")
+        self.scope.write(f":WAV:SOUR C{channel}")
+        
+               
+        self.scope.write(":WAVeform:STARt 0")
+        self.scope.write(":WAVeform:POINt 0")
+        self.scope.write(":WAVeform:SEQUence {},{}".format(frame_num,0))
+        
+        self.scope.write(":WAV:PREamble?")
+        recv_all = self.scope.read_raw()
+        # print(len(recv_all)) # just the package length.
+        recv = recv_all[recv_all.find(b'#')+11:]
+        time_stamp = recv[346:]
+        
+                
+        vdiv, ofst, interval, delay, tdiv, code,adc_bit,one_frame_pts, read_frame, sum_frame = self._parse_preamble(recv,reading_frames=True)
+        
+        one_piece_num = float(self.scope.query(":WAVeform:MAXPoint?").strip())
+        
+        if one_frame_pts > one_piece_num:
+            self.scope.write(":WAVeform:POINt {}".format(one_piece_num))
+        
+        self.scope.write(":WAVeform:WIDTh BYTE")
+        # if there is a 10 bit option set in the Acquisition setting
+        if adc_bit > 8:
+            self.scope.write(":WAVeform:WIDTh WORD")
+        
+        read_times = math.ceil(one_frame_pts / one_piece_num)
+        data_recv = b''
+        
+        for i in range(0, read_times):
+            start = i * one_piece_num
+            self.scope.write(":WAVeform:STARt {}".format(start))
+            self.scope.write("WAV:DATA?")
+            recv_rtn = self.scope.read_raw().rstrip()
+            
+            block_start = recv_rtn.find(b'#')
+            data_digit = int(recv_rtn[block_start + 1:block_start + 2])
+            data_start = block_start + 2 + data_digit
+            data_recv += recv_rtn[data_start:]
+            
+        # print("len(data_recv)=", len(data_recv))
+        
+
+        if adc_bit > 8:
+            convert_data = struct.unpack("%dh" % one_frame_pts, data_recv)
+        else:
+            convert_data = struct.unpack("%db" % one_frame_pts, data_recv)
+            
+        volt_value = []
+        time_value = []
+        
+        for idx in range(0, len(convert_data)):
+            volt_value.append(convert_data[idx] / code * float(vdiv) - float(ofst))
+            time_value.append(-(float(tdiv) * SiglentScope.HORI_NUM / 2) + idx * interval + delay)
+               
+        # Save the data to the class
+        self.channel_data[channel] = (time_value, volt_value)
+        self.sequence_frame_number = frame_num
+        #parse and print the timestamp - perhaps remove?
+        self.frame_timestamp = self._main_time_stamp_deal(time_stamp)
+
+        return time_value, volt_value
+        
+        
 
     def read_waveform_data(self, channel):
         """
@@ -271,7 +413,7 @@ class SiglentScope:
         plt.grid(True)
         plt.show()
 
-    def plot_channels(self, channel_vec=[1, 2, 3, 4], labels=None, title="", read_data = True):
+    def plot_channels(self, channel_vec=[1, 2, 3, 4], labels=None, title="", read_data = True, sequence_frame_number = None):
         """
         Plots the waveform data for the specified channels.
 
@@ -285,16 +427,31 @@ class SiglentScope:
 
         if labels is None:
             labels = [f'Channel {ch}' for ch in channel_vec]
-
-        for i, channel in enumerate(channel_vec):
-            if not read_data:
-                time_value, volt_value = self.channel_data[channel]
-            else:
-                time_value, volt_value = self.read_waveform_data(channel)
             
-            self.ax.plot(time_value, volt_value, label=labels[i])
+        if sequence_frame_number is None:    
 
-        self.ax.set_title(title)
+            for i, channel in enumerate(channel_vec):
+                if not read_data:
+                    time_value, volt_value = self.channel_data[channel]
+                else:
+                    time_value, volt_value = self.read_waveform_data(channel)
+                
+                self.ax.plot(time_value, volt_value, label=labels[i])
+        else:
+            
+            for i, channel in enumerate(channel_vec):
+                if not read_data:
+                    time_value, volt_value = self.channel_data[channel]
+                else:
+                    time_value, volt_value = self.read_sequence_frame(channel, frame_num=sequence_frame_number)#---(channel)
+                
+                self.ax.plot(time_value, volt_value, label=labels[i])
+        
+        if sequence_frame_number is None:
+            self.ax.set_title(title)
+        else:
+            self.ax.set_title(title + " sequence frame: " + str(sequence_frame_number))
+        
         self.ax.set_xlabel("Time (s)")
         self.ax.set_ylabel("Voltage (V)")
         self.ax.legend(loc="upper right")
@@ -302,9 +459,44 @@ class SiglentScope:
         plt.show()
 
 if __name__ == '__main__':
-    # Example plot and save the data
+    # # Example plot and save the data
     scope = SiglentScope("USB0::0xF4EC::0x1011::SDS2PEED6R3524::INSTR")
-    scope.plot_channels([1,2,4],labels=['signal','output','trigger'],title = "Modulator 1")  # Example usage
+    scope.plot_channels([1,2,3],labels=['signal','output','MZI'],title = "Modulator 1")  # Example usage
+    # scope.save_data('channel_data.csv')
+    
+    # # Example of reading a frame and plotting it
+    # import pickle
+    # folder_name = r'some base folder name'
+    
+    # scope = SiglentScope("USB0::0xF4EC::0x1011::SDS2PEED6R3524::INSTR")
+    # frame_start = 100
+    # frame_stop = 167
+    # for frame_number in range(frame_start,frame_stop+1,5):
+    #     #show every fifth frame.
+    #     scope.plot_channels([1,2,3,4],labels=['ramp','output','MZI',"Voltage"],sequence_frame_number=frame_number)  # Example usage
+    #     base_filename = f"50Vpk2pk_frame_{frame_number}.pkl"
+    #     pickle_filename = os.path.join(folder_name, f"{base_filename}.pkl")
+
+    #     #do some processing
+            
+    #     # Combine the data and metadata into a single object
+    #     complete_data = {
+    #         'scope_channel_data': scope.channel_data,
+    #         'scope_frame_number': scope.frame_timestamp,
+    #         'sequence_frame_number':scope.sequence_frame_number,
+    #         'description':"This is a 50 volt peak to peak scan of a ring resontor with 0 offset. at 0.5Hz. The start and end frames should have the extremum voltage data.",
+    #         'channel_labels': ['ramp','output','MZI',"Voltage"],
+    #         'central_wavelength_nm':1550.747,
+    #         'MZI_Freq_MHz': 196,
+                   
+    #         }
+    
+    #     # Save the data to a pickle file
+    #     with open(pickle_filename, 'wb') as f:
+    #         pickle.dump(complete_data, f)
+        
+        
+        
     # scope.save_data('channel_data.csv')
     
     # # Example read the data and then plot it
