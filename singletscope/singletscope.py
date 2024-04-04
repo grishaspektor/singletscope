@@ -12,6 +12,10 @@ import math
 import gc
 import os
 
+#<todo>
+# make sequence reading capability with selected frames.
+# can we get the state of the scope measurement?
+# can we then set the state of the scope measurement?
 class SiglentScope:
     """
     A class to interface with a Siglent oscilloscope and perform data acquisition and analysis.
@@ -213,9 +217,6 @@ class SiglentScope:
             plot_filename = f"{base_filename}.png"
             self.fig.savefig(plot_filename)
 
-
-        
-           
     @staticmethod
     def list_visa_addresses():
         """
@@ -238,7 +239,6 @@ class SiglentScope:
                 instruments[address] = "Could not query IDN"
 
         return instruments
-
 
     @staticmethod
     def plot_external_channel_data(channel_data, channels_to_plot=None, channel_titles=None):
@@ -270,8 +270,6 @@ class SiglentScope:
         plt.legend()
         plt.grid(True)
         plt.show()
-
-    
 
     def plot_channels(self, channel_vec=[1, 2, 3, 4], labels=None, title="", read_data = True):
         """
