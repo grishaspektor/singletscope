@@ -496,9 +496,6 @@ if __name__ == '__main__':
     #         pickle.dump(complete_data, f)
         
         
-        
-    # scope.save_data('channel_data.csv')
-    
     # # Example read the data and then plot it
     # scope = SiglentScope("USB0::0xF4EC::0x1011::SDS2PEED6R3524::INSTR")
     # scope.read_waveform_data(channel=1)

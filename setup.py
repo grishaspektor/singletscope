@@ -7,10 +7,6 @@ setup(
     install_requires=[
         'pyvisa',  # Dependency on PyVISA for instrument communication
         'matplotlib',  # Dependency on matplotlib for plotting
-        'struct',
-	'math',
-        'gc',
-        'os',
     ],
     author='Grisha Spektor',  # Your name or your organization's name
     author_email='grisha.spektor@gmail.com',  # Your email or your organization's email
