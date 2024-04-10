@@ -11,6 +11,7 @@ import struct
 import math
 import gc
 import os
+import time
 
 #<todo>
 # make sequence reading capability with selected frames.
@@ -234,6 +235,10 @@ class SiglentScope:
         if adc_bit > 8:
             convert_data = struct.unpack("%dh" % one_frame_pts, data_recv)
         else:
+            # print("one frame length: ", (one_frame_pts))
+            # print("data_recv: ",len(data_recv))
+            # print("struct.calcsize: ",struct.calcsize("%db" % one_frame_pts))
+            one_frame_pts = len(data_recv) # this is a brute force workaround to an issue that sometimes the data_recv doesn't match in length the one_frame_pts.
             convert_data = struct.unpack("%db" % one_frame_pts, data_recv)
             
         volt_value = []
@@ -460,40 +465,44 @@ class SiglentScope:
 
 if __name__ == '__main__':
     # # Example plot and save the data
-    scope = SiglentScope("USB0::0xF4EC::0x1011::SDS2PEED6R3524::INSTR")
-    scope.plot_channels([1,2,3],labels=['signal','output','MZI'],title = "Modulator 1")  # Example usage
+    # scope = SiglentScope("USB0::0xF4EC::0x1011::SDS2PEED6R3524::INSTR")
+    # scope.plot_channels([1,2,3],labels=['signal','output','MZI'],title = "Modulator 1")  # Example usage
     # scope.save_data('channel_data.csv')
     
     # # Example of reading a frame and plotting it
-    # import pickle
-    # folder_name = r'some base folder name'
+    import pickle
+    folder_name = r'C:\Users\lab\OneDrive - Octave Photonics (1)\Documents - Octave Lab\Software\Resonator Characterization\Experiment\Resonator Data\CMP run 1\Rings chip 2_Chip23_RR_200_RW_2um_gap_0.5\Sequence_voltage_scan_larger_ramp_range'
     
-    # scope = SiglentScope("USB0::0xF4EC::0x1011::SDS2PEED6R3524::INSTR")
-    # frame_start = 100
-    # frame_stop = 167
-    # for frame_number in range(frame_start,frame_stop+1,5):
-    #     #show every fifth frame.
-    #     scope.plot_channels([1,2,3,4],labels=['ramp','output','MZI',"Voltage"],sequence_frame_number=frame_number)  # Example usage
-    #     base_filename = f"50Vpk2pk_frame_{frame_number}.pkl"
-    #     pickle_filename = os.path.join(folder_name, f"{base_filename}.pkl")
+    scope = SiglentScope("USB0::0xF4EC::0x1011::SDS2PEED6R3524::INSTR")
+    frame_start = 1
+    frame_stop = 170
+    for frame_number in range(frame_start,frame_stop+1,2):
+        #show every fifth frame.
+        scope.plot_channels([1,2,3,4],labels=['ramp','output','MZI',"Voltage"],sequence_frame_number=frame_number)
+        plt.close()
+        
+        base_filename = f"50Vpk2pk_frame_{frame_number}.pkl"
+        pickle_filename = os.path.join(folder_name, f"{base_filename}.pkl")
 
-    #     #do some processing
+        #do some processing
             
-    #     # Combine the data and metadata into a single object
-    #     complete_data = {
-    #         'scope_channel_data': scope.channel_data,
-    #         'scope_frame_number': scope.frame_timestamp,
-    #         'sequence_frame_number':scope.sequence_frame_number,
-    #         'description':"This is a 50 volt peak to peak scan of a ring resontor with 0 offset. at 0.5Hz. The start and end frames should have the extremum voltage data.",
-    #         'channel_labels': ['ramp','output','MZI',"Voltage"],
-    #         'central_wavelength_nm':1550.747,
-    #         'MZI_Freq_MHz': 196,
+        # Combine the data and metadata into a single object
+        complete_data = {
+            'scope_channel_data': scope.channel_data,
+            'scope_frame_number': scope.frame_timestamp,
+            'sequence_frame_number':scope.sequence_frame_number,
+            'description':"This is a 50 volt peak to peak scan of a ring resontor with 0 offset. at 0.5Hz. The start and end frames should have the extremum voltage data.",
+            'channel_labels': ['ramp','output','MZI',"Voltage"],
+            'central_wavelength_nm':1550.389,
+            'MZI_Freq_MHz': 196,
                    
-    #         }
+            }
     
-    #     # Save the data to a pickle file
-    #     with open(pickle_filename, 'wb') as f:
-    #         pickle.dump(complete_data, f)
+        # Save the data to a pickle file
+        with open(pickle_filename, 'wb') as f:
+            pickle.dump(complete_data, f)
+        time.sleep(1) #this delay is not to overload the scope with too many requests.
+        #there is a better way of doing this but it works.
         
         
     # # Example read the data and then plot it
